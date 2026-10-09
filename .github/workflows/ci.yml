@@ -53,7 +53,9 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Chạy test trong Docker (Mongo thật)
-        run: docker compose --profile test run --rm test
+        run: |
+          docker compose --profile test build
+          docker compose --profile test run --rm test
 
       - name: Dọn dẹp
         if: always()

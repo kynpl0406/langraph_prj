@@ -145,3 +145,12 @@ def test_db(monkeypatch):
 
     client.drop_database(name)
     client.close()
+    
+@pytest.fixture
+def indexed_db(test_db):
+    """test_db đã được index vector bằng embedding giả."""
+    from app.retrieval.embeddings import FakeEmbedder
+    from app.retrieval.indexer import build_index
+
+    build_index(test_db, FakeEmbedder())
+    return test_db

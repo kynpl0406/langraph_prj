@@ -1,15 +1,9 @@
-import re
-
 from langchain_core.tools import tool
 
 from app.db import db, to_plain
+from app.retrieval.filters import build_query, rx
 
 LIMIT = 8  # luôn giới hạn kết quả để không tràn context của Gemini
-
-
-def _rx(text: str) -> dict:
-    """Regex không phân biệt hoa thường. re.escape để input người dùng không thành regex."""
-    return {"$regex": re.escape(text), "$options": "i"}
 
 
 def _slim(p: dict) -> dict:
@@ -23,7 +17,8 @@ def _slim(p: dict) -> dict:
 @tool
 def list_categories() -> list:
     """Liệt kê tất cả danh mục dịch vụ (mã, tên tiếng Việt/Anh, từ đồng nghĩa).
-    Gọi tool này trước khi tìm nhà cung cấp nếu chưa rõ danh mục."""
+    Chỉ gọi khi người dùng hỏi có những loại dịch vụ nào. KHÔNG cần gọi trước
+    search_providers vì search_providers tự khớp danh mục."""
     return to_plain(list(db.categories.find({}, {"code": 1, "name": 1, "aliases": 1})))
 
 
@@ -37,65 +32,14 @@ def search_providers(
     area: quận, phường hoặc thành phố, ví dụ 'Thủ Đức', 'Quận 9'.
     max_price: giá tối thiểu của dịch vụ không vượt quá mức này (VND), 0 là không giới hạn.
     Lưu ý: dữ liệu chưa được kiểm duyệt, một số dịch vụ chỉ báo giá theo yêu cầu."""
-    conds = []
-
-    if category:
-        cats = list(
-            db.categories.find(
-                {
-                    "$or": [
-                        {"code": _rx(category)},
-                        {"name.vi": _rx(category)},
-                        {"name.en": _rx(category)},
-                        {"aliases": _rx(category)},
-                    ]
-                },
-                {"code": 1},
-            )
-        )
-        if not cats:
-            return []
-        conds.append({"category_codes": {"$in": [c["code"] for c in cats]}})
-
-    if keyword:
-        conds.append(
-            {
-                "$or": [
-                    {"provider_name": _rx(keyword)},
-                    {"description": _rx(keyword)},
-                ]
-            }
-        )
-
-    if area:
-        conds.append(
-            {
-                "$or": [
-                    {"service_coverage.raw_text": _rx(area)},
-                    {"location.address_line": _rx(area)},
-                    {"location.ward.name": _rx(area)},
-                    {"location.district.name": _rx(area)},
-                    {"location.province.name": _rx(area)},
-                    {"description": _rx(area)},
-                ]
-            }
-        )
-
-    if max_price:
-        conds.append({"pricing": {"$elemMatch": {"price_min": {"$lte": max_price}}}})
-
-    q = {"$and": conds} if conds else {}
+    q = build_query(db, category=category, area=area, max_price=max_price, keyword=keyword)
+    if q is None:
+        return []
     projection = {
-        "provider_name": 1,
-        "description": 1,
-        "category_codes": 1,
-        "pricing": 1,
-        "phones": 1,
-        "service_coverage.raw_text": 1,
-        "location.address_line": 1,
-        "location.district.name": 1,
-        "canonical_url": 1,
-        "provider_status": 1,
+        "provider_name": 1, "description": 1, "category_codes": 1,
+        "pricing": 1, "phones": 1, "service_coverage.raw_text": 1,
+        "location.address_line": 1, "location.district.name": 1,
+        "canonical_url": 1, "provider_status": 1,
     }
     docs = db.providers.find(q, projection).limit(LIMIT)
     return to_plain([_slim(d) for d in docs])
@@ -105,7 +49,7 @@ def search_providers(
 def get_provider_detail(provider_name: str) -> dict:
     """Xem chi tiết một nhà cung cấp (bảng giá đầy đủ, địa chỉ, liên hệ) theo tên."""
     doc = db.providers.find_one(
-        {"provider_name": _rx(provider_name)},
+        {"provider_name": rx(provider_name)},
         {"evidences": 0, "review": 0},
     )
     return to_plain(doc) if doc else {"error": "Không tìm thấy nhà cung cấp"}
