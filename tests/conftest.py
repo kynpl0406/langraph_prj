@@ -8,6 +8,7 @@ from pymongo import MongoClient
 # Ghi đè THẲNG (không dùng setdefault) để dù .env có URI Atlas và key Gemini thật,
 # test cũng không bao giờ dùng tới. Phải đặt trước khi import app.
 os.environ["MONGO_URI"] = "mongodb://localhost:27018"
+os.environ["MONGO_DB"] = "home_services_unused"
 os.environ["GOOGLE_API_KEY"] = "fake-key"
 
 TEST_MONGO_URI = os.getenv("TEST_MONGO_URI", "mongodb://localhost:27018")
