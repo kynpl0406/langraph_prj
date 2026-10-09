@@ -1,10 +1,30 @@
 services:
   app:
-    build: .
-    env_file: .env
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - path: .env
+        required: false
     stdin_open: true
-    enivronment:
-      MONGO_URI: mongodb://host.docker.internal:27017
     tty: true
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+
+  mongo-test:
+    image: mongo:7
+    profiles: ["test"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1})"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    environment:
+      TEST_MONGO_URI: mongodb://mongo-test:27017
+    depends_on:
+      mongo-test:
+        condition: service_healthy
