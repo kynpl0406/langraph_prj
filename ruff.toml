@@ -1,0 +1,5 @@
+line-length = 100
+
+[lint]
+select = ["E", "F", "I"]   # lỗi cú pháp/style, lỗi logic (import thừa, biến thừa), sắp xếp import
+ignore = ["E501"]          # không bắt lỗi dòng dài
